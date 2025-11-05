@@ -1,5 +1,5 @@
 {
-  "name": "@gdziuba/node-red-usbhid",
+  "name": "@jpkelly/node-red-usbhid",
   "version": "1.0.3",
   "description": "A node-hid (USB HID device access library) wrapper for Node-RED",
   "dependencies": {
