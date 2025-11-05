@@ -4,10 +4,56 @@
     defaults: {
       vid: {value: '', required: true},
       pid: {value: '', required: true},
+      interface: {value: ''},
+      path: {value: ''},
       name: {value: ''}
     },
     label: function(){
       return this.name || 'HIDConfig';
+    },
+    oneditprepare: function() {
+      var that = this;
+      
+      function refreshDevices() {
+        $.get('/usbhid/devices')
+          .done(function(data) {
+            var select = $('#usbhid-device-list');
+            select.empty();
+            select.append('<option value="">Select a device...</option>');
+            
+            data.forEach(function(device) {
+              var label = (device.product || 'Unknown Device') + 
+                         ' VID:0x' + device.vendorId.toString(16).padStart(4, '0').toUpperCase() + 
+                         ' PID:0x' + device.productId.toString(16).padStart(4, '0').toUpperCase();
+              if (device.interface !== undefined) {
+                label += ' iface:' + device.interface;
+              }
+              label += ' <' + device.path + '>';
+              
+              var option = $('<option></option>')
+                .attr('value', device.path)
+                .text(label);
+              select.append(option);
+            });
+          })
+          .fail(function() {
+            $('#usbhid-device-list').empty().append('<option value="">Error loading devices</option>');
+          });
+      }
+      
+      $('#usbhid-refresh').click(function() {
+        refreshDevices();
+      });
+      
+      $('#usbhid-use').click(function() {
+        var selectedPath = $('#usbhid-device-list').val();
+        if (selectedPath) {
+          $('#node-config-input-path').val(selectedPath);
+        }
+      });
+      
+      // Load devices on dialog open
+      refreshDevices();
     }
   });
 </script>
@@ -23,6 +69,23 @@
   <div class="form-row">
     <label for="node-config-input-pid"><i class="fa "></i> PID </label>
     <input type="text" id="node-config-input-pid" placeholder="">
+  </div>
+
+  <div class="form-row">
+    <label for="node-config-input-interface"><i class="fa "></i> Interface </label>
+    <input type="text" id="node-config-input-interface" placeholder="Optional">
+  </div>
+
+  <div class="form-row">
+    <label for="node-config-input-path"><i class="fa "></i> Path </label>
+    <input type="text" id="node-config-input-path" placeholder="If set, Path overrides VID/PID">
+  </div>
+
+  <div class="form-row">
+    <label><i class="fa fa-list"></i> Devices</label>
+    <select id="usbhid-device-list" style="width:70%"></select>
+    <button type="button" class="editor-button" id="usbhid-refresh">Refresh</button>
+    <button type="button" class="editor-button" id="usbhid-use">Use</button>
   </div>
 
     <div class="form-row">
