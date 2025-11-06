@@ -200,7 +200,7 @@ module.exports = function(RED) {
   }
 
 
-  RED.nodes.registerType("getHIDdevices-path", getHIDNode);
-  RED.nodes.registerType("HIDdevice-path", usbHIDNode);
-  RED.nodes.registerType('HIDConfig-path', HIDConfigNode);
+  RED.nodes.registerType("getHIDdevices", getHIDNode);
+  RED.nodes.registerType("HIDdevice", usbHIDNode);
+  RED.nodes.registerType('HIDConfig', HIDConfigNode);
 }

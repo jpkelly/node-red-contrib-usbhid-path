@@ -1,5 +1,5 @@
 <script type="text/javascript">
-  RED.nodes.registerType("HIDConfig-path",{
+  RED.nodes.registerType("HIDConfig",{
     category:'config',
     defaults: {
       vid: {value: '', required: true},
@@ -59,7 +59,7 @@
 </script>
 
 
-<script type="text/x-red" data-template-name="HIDConfig-path">
+<script type="text/x-red" data-template-name="HIDConfig">
 
   <div class="form-row">
     <label for="node-config-input-vid"><i class="fa "></i> VID </label>
@@ -102,7 +102,7 @@
 
 
 <script type="text/javascript">
-    RED.nodes.registerType('getHIDdevices-path',{
+    RED.nodes.registerType('getHIDdevices',{
         category: 'USBHid-Path',
         color: '#dce0d9',
         defaults: {
@@ -118,7 +118,7 @@
 </script>
 
 
-<script type="text/x-red" data-template-name="getHIDdevices-path">
+<script type="text/x-red" data-template-name="getHIDdevices">
 
       <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
@@ -132,11 +132,11 @@
 
 
 <script type="text/javascript">
-    RED.nodes.registerType('HIDdevice-path',{
+    RED.nodes.registerType('HIDdevice',{
         category: 'USBHid-Path',
         color: '#dce0d9',
         defaults: {
-            connection: {type: 'HIDConfig-path', required: true},
+            connection: {type: 'HIDConfig', required: true},
             name: {value:""}
         },
         inputs:1,
@@ -150,7 +150,7 @@
 </script>
 
 
-<script type="text/x-red" data-template-name="HIDdevice-path">
+<script type="text/x-red" data-template-name="HIDdevice">
 
     <div class="form-row">
     <label for="node-input-connection"><i class="fa "></i> Connection</label>
