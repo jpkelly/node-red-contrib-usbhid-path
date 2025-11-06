@@ -1,14 +1,36 @@
 # node-red-contrib-usbhid
 
-A node-hid (USB HID device access library) wrapper for nodered
+A node-hid (USB HID device access library) wrapper for Node-RED with path-based device selection support. This fork adds the ability to select devices by path, which is useful when you have multiple identical devices with the same VID/PID.
 
-Credit goes to node-hid. 
+Credit goes to node-hid and the original node-red-contrib-usbhid package.
 
-You can look up either git to find information on setup, Prerequisites and Platforms to get the node working:
-https://github.com/node-hid/node-hid
+## Features
 
+- All the features of the original package
+- Path-based device selection support
+- Non-conflicting node names (uses -p suffix)
+- Device picker in configuration node
 
-### Prerequisites:
+## Node Types
+
+This package provides three nodes with -p suffix to avoid conflicts with the original package:
+
+1. `hidconfig-p` - Configuration node with path-based device selection
+   - Configure by VID/PID or device path
+   - Built-in device picker shows available devices
+   - Shows device paths for easy identification
+
+2. `gethiddevices-p` - List available HID devices
+   - Lists all connected USB HID devices
+   - Includes device paths in the output
+   - Useful for device discovery
+
+3. `hiddevice-p` - Communicate with HID devices
+   - Send and receive data from HID devices
+   - Auto-reconnect on device disconnect
+   - Two outputs: data and errors
+
+## Prerequisites
 
 * [Node.js](https://nodejs.org/) v0.8 - v4.x+
 * Mac OS X 10.8, Linux (kernel 2.6+), and Windows XP+
@@ -23,73 +45,73 @@ Platforms we pre-build binaries for:
 - Linux Debian/Ubuntu x64: v4.2.x
 - Raspberry Pi arm: v4.2.x
 
-## How to Install on Windows
+## Installation
 
-This package works natively with Windows.
-
-Manual installation is the current way to get the node.  It will be added to the pallette manager in the future.
-
-### Install from source
-From github:
-Navigate to the your home directory on linux and windows it is typically ~/.node-red/node-modules
-```powershell
-git clone https://github.com/gdziuba/node-red-contrib-usbhid.git
-```
-```powershell
-cd node-red-contrib-usbhid
+### From Source
+```bash
+cd ~/.node-red/node-modules
+git clone https://github.com/jpkelly/node-red-contrib-usbhid-path.git
+cd node-red-contrib-usbhid-path
 npm install
 ```
 
-## How to Install on Linux
+### Linux USB Permissions
+For Linux systems, you need to set up proper USB permissions:
 
-### HID ( USB ) read/write access for non root users ( in my case for user pi on an raspberry pi 2 running nodered )
-
-**Install libraries for Linux**
-
-```sudo apt install libusb-1.0-0 libusb-1.0-0-dev libudev-dev```
-
-The Pd-extended [hid] object allows you to access Human Interface Devices such as mice, keyboards, and joysticks. However, in most Linux distributions, these devices are setup to where they cannot be read/written directly by Pd unless you run it as root.
-
-Running a non-system process as root is considered a security risk, so an alternative is to change the permissions of the input devices so that pd can read/write them.
-
+1. Install required libraries:
+```bash
+sudo apt install libusb-1.0-0 libusb-1.0-0-dev libudev-dev
 ```
+
+2. Create udev rules:
+```bash
 sudo mkdir -p /etc/udev/rules.d
 sudo nano /etc/udev/rules.d/85-pure-data.rules
 ```
-Now add the following rules to /etc/udev/rules.d/85-pure-data.rules making sure to updated **KERNEL to your hidraw\* device**:
 
+3. Add the following rules (update KERNEL for your device):
 ```
 SUBSYSTEM=="input", GROUP="input", MODE="0777"
 SUBSYSTEM=="usb", MODE:="777", GROUP="input"
-KERNEL=="hidraw<<put HID Number Here>>", MODE="0777", GROUP="input"
+KERNEL=="hidraw*", MODE="0777", GROUP="input"
 ```
 
-Example:
-
-```
-SUBSYSTEM=="input", GROUP="input", MODE="0777"
-SUBSYSTEM=="usb", MODE:="777", GROUP="input"
-KERNEL=="hidraw0", MODE="0777", GROUP="input"
-```
-
-**Make sure no existing rules compete.  I found existing file on Raspberry pi that needed updating.  I added above code instead of creating a new file**
-
-Then create an "input" group and add yourself to it:
-
-```
+4. Set up input group:
+```bash
 sudo groupadd -f input
 sudo gpasswd -a $USER input
 ```
 
-Reloads rules:
+5. Reload rules and reboot:
+```bash
+sudo udevadm control --reload-rules
+sudo reboot
 ```
-udevadm control --reload-rules
-```
 
-Reboot your machine for the rules to take effect.
-Your nodejs / nodered has now FULL ACCESS !! to you usb devides. Feel free to adjust the permissions to fit your needs.
+## Usage
 
+1. Add a `hidconfig-p` node to configure your device:
+   - Enter VID/PID, or
+   - Use the device picker to select by path
+   - (Optional) Set interface number if needed
 
-## How to Use
+2. Use `gethiddevices-p` to list available devices:
+   - Connect to an inject node to trigger
+   - View device details in debug node
 
-Leverage this [Flow](https://flows.nodered.org/flow/3e08565bc0e024e81325dc028c5da792) to get started.
+3. Use `hiddevice-p` to communicate:
+   - Configure with a `hidconfig-p` node
+   - Input: Buffer or Array payload
+   - Output 1: Received data
+   - Output 2: Errors
+
+### Example Flow
+See the included `examples/getStarted.json` for a working example flow.
+
+## Important Notes
+
+- When using with input devices (keyboards, mice, etc.), be aware that the node may take exclusive control
+- For system input devices, prefer using path-based selection to ensure you connect to the right device
+- Multiple identical devices can be distinguished by their paths
+
+For more information about node-hid, visit: https://github.com/node-hid/node-hid
