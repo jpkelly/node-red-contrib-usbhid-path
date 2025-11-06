@@ -29,10 +29,41 @@ sudo nano /etc/udev/rules.d/85-hid.rules
 
 2. Add these rules to the file:
 ```
+# General permissions for HID devices
 SUBSYSTEM=="input", GROUP="input", MODE="0777"
 SUBSYSTEM=="usb", MODE:="777", GROUP="input"
 KERNEL=="hidraw*", MODE="0777", GROUP="input"
+
+# Example of creating a custom symlink for a specific USB device
+# Replace the idVendor and idProduct with your device's values from 'lsusb'
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="5750", SYMLINK+="hidraw-mydevice"
+
+# Alternative method using serial number (if available)
+# SUBSYSTEM=="hidraw", ATTRS{serial}=="123456", SYMLINK+="hidraw-mydevice"
+
+# You can also match by manufacturer and product strings
+# SUBSYSTEM=="hidraw", ATTRS{manufacturer}=="Company Name", ATTRS{product}=="Device Name", SYMLINK+="hidraw-mydevice"
 ```
+
+To create a rule for your specific device:
+1. Find your device's details using:
+```bash
+lsusb
+# Example output: Bus 001 Device 003: ID 0483:5750 STMicroelectronics Device Name
+```
+
+2. Use `udevadm` to see all device attributes:
+```bash
+udevadm info -a -n /dev/hidraw0
+```
+
+3. Create a specific rule using the attributes that uniquely identify your device.
+For example, if your device has a unique serial number:
+```
+SUBSYSTEM=="hidraw", ATTRS{serial}=="ABC123", SYMLINK+="hidraw-mydevice"
+```
+
+This will create a persistent symlink at `/dev/hidraw-mydevice` that always points to your specific device, regardless of which hidraw number it gets assigned.
 
 3. Add your user (typically 'pi') to the input group:
 ```bash
