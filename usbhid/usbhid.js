@@ -66,11 +66,13 @@ module.exports = function(RED) {
       try {
         device = openHid(node.server);
         
-        node.status({
+        const status = {
           fill: "green",
           shape: "dot",
           text: "connected"
-        });
+        };
+        node.status(status);
+        node.emit('status', status);
         
         backoffDelay = 250; // Reset backoff on successful connection
         
@@ -94,11 +96,13 @@ module.exports = function(RED) {
 
       } catch (err) {
         node.error("Failed to connect to HID device: " + err.toString());
-        node.status({
+        const status = {
           fill: "red",
           shape: "ring",
           text: "disconnected"
-        });
+        };
+        node.status(status);
+        node.emit('status', status);
         
         scheduleReconnect();
       }
@@ -118,11 +122,13 @@ module.exports = function(RED) {
         clearTimeout(reconnectTimer);
       }
       
-      node.status({
+      const status = {
         fill: "yellow",
         shape: "ring", 
         text: "reconnecting in " + (backoffDelay/1000).toFixed(1) + "s"
-      });
+      };
+      node.status(status);
+      node.emit('status', status);
       
       reconnectTimer = setTimeout(function() {
         reconnectTimer = null;
