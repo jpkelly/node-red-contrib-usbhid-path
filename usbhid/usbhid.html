@@ -1,5 +1,5 @@
 <script type="text/javascript">
-  RED.nodes.registerType("HIDConfig",{
+  RED.nodes.registerType("HIDConfig-path",{
     category:'config',
     defaults: {
       vid: {value: '', required: true},
@@ -59,7 +59,7 @@
 </script>
 
 
-<script type="text/x-red" data-template-name="HIDConfig">
+<script type="text/x-red" data-template-name="HIDConfig-path">
 
   <div class="form-row">
     <label for="node-config-input-vid"><i class="fa "></i> VID </label>
@@ -95,15 +95,15 @@
 
 </script>
 
-<script type="text/x-red" data-help-name="HIDConfig">
-  <p>Details of the HID Device connection</p>
+<script type="text/x-red" data-help-name="HIDConfig-path">
+  <p>Details of the HID Device connection with path-based device selection support</p>
 </script>
 
 
 
 <script type="text/javascript">
-    RED.nodes.registerType('getHIDdevices',{
-        category: 'USBHid',
+    RED.nodes.registerType('getHIDdevices-path',{
+        category: 'USBHid-Path',
         color: '#dce0d9',
         defaults: {
             name: {value:""}            
@@ -118,7 +118,7 @@
 </script>
 
 
-<script type="text/x-red" data-template-name="getHIDdevices">
+<script type="text/x-red" data-template-name="getHIDdevices-path">
 
       <div class="form-row">
         <label for="node-input-name"><i class="icon-tag"></i> Name</label>
@@ -126,17 +126,17 @@
     </div>
 </script>
 
-<script type="text/x-red" data-help-name="getHIDdevices">
-    <p>A simple node that lists the connected HID Devices ans return them as msg.payload</p>
+<script type="text/x-red" data-help-name="getHIDdevices-path">
+    <p>A simple node that lists the connected HID Devices and returns them as msg.payload, including device paths</p>
 </script>
 
 
 <script type="text/javascript">
-    RED.nodes.registerType('HIDdevice',{
-        category: 'USBHid',
+    RED.nodes.registerType('HIDdevice-path',{
+        category: 'USBHid-Path',
         color: '#dce0d9',
         defaults: {
-            connection: {type: 'HIDConfig', required: true},
+            connection: {type: 'HIDConfig-path', required: true},
             name: {value:""}
         },
         inputs:1,
@@ -150,7 +150,7 @@
 </script>
 
 
-<script type="text/x-red" data-template-name="HIDdevice">
+<script type="text/x-red" data-template-name="HIDdevice-path">
 
     <div class="form-row">
     <label for="node-input-connection"><i class="fa "></i> Connection</label>
@@ -163,8 +163,8 @@
     </div>
 </script>
 
-<script type="text/x-red" data-help-name="HIDdevice">
-    <p>A simple node that receives BYTE array or Buffer as msg.payload and sends it to the HID Device. It sends received data as msg.payload (Buffer) to output 1 and errors to output 2</p>
+<script type="text/x-red" data-help-name="HIDdevice-path">
+    <p>A node that communicates with HID Devices using either path-based or VID/PID selection. Receives BYTE array or Buffer as msg.payload and sends it to the HID Device. It sends received data as msg.payload (Buffer) to output 1 and errors to output 2</p>
 </script>
 
 

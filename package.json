@@ -1,7 +1,7 @@
 {
   "name": "@jpkelly/node-red-usbhid",
   "version": "1.0.3",
-  "description": "A node-hid (USB HID device access library) wrapper for Node-RED",
+  "description": "A node-hid wrapper for Node-RED with path-based device selection support",
   "dependencies": {
     "node-hid": "^3.0.0"
   },
