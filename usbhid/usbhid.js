@@ -66,13 +66,15 @@ module.exports = function(RED) {
       try {
         device = openHid(node.server);
         
-        const status = {
+        const statusMsg = {
           fill: "green",
           shape: "dot",
           text: "connected"
         };
-        node.status(status);
-        node.emit('status', status);
+        node.status(statusMsg);
+        
+        // Send status message
+        node.send([null, null, { status: statusMsg }]);
         
         backoffDelay = 250; // Reset backoff on successful connection
         
@@ -80,7 +82,7 @@ module.exports = function(RED) {
           var message = {
             payload: data
           };
-          node.send([message, null]);
+          node.send([message, null, null]);
         });
 
         device.on("error", function(err) {
@@ -88,7 +90,7 @@ module.exports = function(RED) {
           var message = {
             payload: err
           };
-          node.send([null, message]);
+          node.send([null, message, null]);
           
           // Attempt reconnect
           scheduleReconnect();
@@ -96,13 +98,15 @@ module.exports = function(RED) {
 
       } catch (err) {
         node.error("Failed to connect to HID device: " + err.toString());
-        const status = {
+        const statusMsg = {
           fill: "red",
           shape: "ring",
           text: "disconnected"
         };
-        node.status(status);
-        node.emit('status', status);
+        node.status(statusMsg);
+        
+        // Send status message
+        node.send([null, null, { status: statusMsg }]);
         
         scheduleReconnect();
       }
@@ -122,13 +126,15 @@ module.exports = function(RED) {
         clearTimeout(reconnectTimer);
       }
       
-      const status = {
+      const statusMsg = {
         fill: "yellow",
         shape: "ring", 
         text: "reconnecting in " + (backoffDelay/1000).toFixed(1) + "s"
       };
-      node.status(status);
-      node.emit('status', status);
+      node.status(statusMsg);
+      
+      // Send status message
+      node.send([null, null, { status: statusMsg }]);
       
       reconnectTimer = setTimeout(function() {
         reconnectTimer = null;

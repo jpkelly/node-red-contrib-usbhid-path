@@ -118,7 +118,8 @@
             name: {value:""}
         },
         inputs:1,
-        outputs:2,
+        outputs:3,
+        outputLabels: ["data", "error", "status"],
         icon: "usb.png",
         align: 'right',
         label: function() {
@@ -139,5 +140,11 @@
 </script>
 
 <script type="text/x-red" data-help-name="hiddevice-p">
-    <p>A node that communicates with HID Devices using either path-based or VID/PID selection. Receives BYTE array or Buffer as msg.payload and sends it to the HID Device. It sends received data as msg.payload (Buffer) to output 1 and errors to output 2</p>
+    <p>A node that communicates with HID Devices using either path-based or VID/PID selection. Receives BYTE array or Buffer as msg.payload and sends it to the HID Device.</p>
+    <h3>Outputs</h3>
+    <ol>
+        <li>Data output: Received data as msg.payload (Buffer)</li>
+        <li>Error output: Error messages when they occur</li>
+        <li>Status output: Connection status updates as {status: {fill, shape, text}}</li>
+    </ol>
 </script>
