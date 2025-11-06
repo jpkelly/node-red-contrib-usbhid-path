@@ -62,6 +62,35 @@ module.exports = function(RED) {
     var backoffDelay = 250; // Start with 250ms
     var maxBackoffDelay = 5000; // Max 5 seconds
 
+    // Helper function to send status updates
+    function sendStatus(status) {
+        node.status(status);
+        
+        const msg = {
+            topic: "status",
+            payload: status,
+            timestamp: new Date().getTime()
+        };
+        
+        // Use setImmediate to ensure the message is sent outside the current execution context
+        setImmediate(() => {
+            try {
+                node.send([null, null, msg]);
+                node.log(`Sent status message: ${status.text}`);
+            } catch (e) {
+                node.error("Error sending status message: " + e.toString());
+            }
+        });
+    }
+
+    // Initialize all outputs
+    node.on("input", function(msg, send, done) {
+        // Ensure send exists (for backwards compatibility)
+        send = send || function() { node.send.apply(node, arguments); };
+        // Process message here
+        done();
+    });
+
     function connect() {
       try {
         device = openHid(node.server);
@@ -91,20 +120,11 @@ module.exports = function(RED) {
         });
         
         // After successful setup, send connected status
-        const status = {
-          fill: "green",
-          shape: "dot",
-          text: "connected"
-        };
-        
-        // Update node status
-        node.status(status);
-        node.log("Setting connected status");
-        
-        // Send status message on third output
-        const msg = { payload: status };
-        node.send([null, null, msg]);
-        node.log("Sent connected status message");
+        sendStatus({
+            fill: "green",
+            shape: "dot",
+            text: "connected"
+        });
         
         // Set up event handlers after successful connection
         device.on("data", function(data) {
@@ -128,19 +148,12 @@ module.exports = function(RED) {
 
       } catch (err) {
         node.error("Failed to connect to HID device: " + err.toString());
-        // Create status update
-        const status = {
-          fill: "red",
-          shape: "ring",
-          text: "disconnected"
-        };
-        
-        // Update node status
-        node.status(status);
-        
-        // Send status message on third output
-        const msg = { payload: status };
-        node.send([null, null, msg]);
+        // Send disconnected status
+        sendStatus({
+            fill: "red",
+            shape: "ring",
+            text: "disconnected"
+        });
         
         scheduleReconnect();
       }
@@ -160,19 +173,12 @@ module.exports = function(RED) {
         clearTimeout(reconnectTimer);
       }
       
-      // Create status update
-      const status = {
-        fill: "yellow",
-        shape: "ring", 
-        text: "reconnecting in " + (backoffDelay/1000).toFixed(1) + "s"
-      };
-      
-      // Update node status
-      node.status(status);
-      
-      // Send status message on third output
-      const msg = { payload: status };
-      node.send([null, null, msg]);
+      // Send reconnecting status
+      sendStatus({
+          fill: "yellow",
+          shape: "ring", 
+          text: "reconnecting in " + (backoffDelay/1000).toFixed(1) + "s"
+      });
       
       reconnectTimer = setTimeout(function() {
         reconnectTimer = null;
