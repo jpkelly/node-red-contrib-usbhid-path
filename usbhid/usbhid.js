@@ -66,15 +66,19 @@ module.exports = function(RED) {
       try {
         device = openHid(node.server);
         
-        const statusMsg = {
+        // Create status update
+        const status = {
           fill: "green",
           shape: "dot",
           text: "connected"
         };
-        node.status(statusMsg);
         
-        // Send status message
-        node.send([null, null, { status: statusMsg }]);
+        // Update node status
+        node.status(status);
+        
+        // Send status message on third output
+        const msg = { payload: status };
+        node.send([null, null, msg]);
         
         backoffDelay = 250; // Reset backoff on successful connection
         
@@ -98,15 +102,19 @@ module.exports = function(RED) {
 
       } catch (err) {
         node.error("Failed to connect to HID device: " + err.toString());
-        const statusMsg = {
+        // Create status update
+        const status = {
           fill: "red",
           shape: "ring",
           text: "disconnected"
         };
-        node.status(statusMsg);
         
-        // Send status message
-        node.send([null, null, { status: statusMsg }]);
+        // Update node status
+        node.status(status);
+        
+        // Send status message on third output
+        const msg = { payload: status };
+        node.send([null, null, msg]);
         
         scheduleReconnect();
       }
@@ -126,15 +134,19 @@ module.exports = function(RED) {
         clearTimeout(reconnectTimer);
       }
       
-      const statusMsg = {
+      // Create status update
+      const status = {
         fill: "yellow",
         shape: "ring", 
         text: "reconnecting in " + (backoffDelay/1000).toFixed(1) + "s"
       };
-      node.status(statusMsg);
       
-      // Send status message
-      node.send([null, null, { status: statusMsg }]);
+      // Update node status
+      node.status(status);
+      
+      // Send status message on third output
+      const msg = { payload: status };
+      node.send([null, null, msg]);
       
       reconnectTimer = setTimeout(function() {
         reconnectTimer = null;
