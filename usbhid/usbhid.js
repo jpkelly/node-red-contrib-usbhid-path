@@ -65,8 +65,32 @@ module.exports = function(RED) {
     function connect() {
       try {
         device = openHid(node.server);
+        node.log("HID device opened successfully");
         
-        // Create status update
+        // Reset backoff on successful connection
+        backoffDelay = 250;
+        
+        // Set up event handlers first
+        device.on("data", function(data) {
+          var message = {
+            payload: data
+          };
+          node.send([message, null, null]);
+        });
+
+        // Handle device errors
+        device.on("error", function(err) {
+          node.error("HID device error: " + err.toString());
+          var message = {
+            payload: err
+          };
+          node.send([null, message, null]);
+          
+          // Attempt reconnect
+          scheduleReconnect();
+        });
+        
+        // After successful setup, send connected status
         const status = {
           fill: "green",
           shape: "dot",
@@ -75,13 +99,14 @@ module.exports = function(RED) {
         
         // Update node status
         node.status(status);
+        node.log("Setting connected status");
         
         // Send status message on third output
         const msg = { payload: status };
         node.send([null, null, msg]);
+        node.log("Sent connected status message");
         
-        backoffDelay = 250; // Reset backoff on successful connection
-        
+        // Set up event handlers after successful connection
         device.on("data", function(data) {
           var message = {
             payload: data
@@ -89,6 +114,7 @@ module.exports = function(RED) {
           node.send([message, null, null]);
         });
 
+        // Handle device errors
         device.on("error", function(err) {
           node.error("HID device error: " + err.toString());
           var message = {
