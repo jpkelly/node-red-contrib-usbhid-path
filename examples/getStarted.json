@@ -42,7 +42,7 @@
     },
     {
        "id":"c1ecae6308a0525f",
-       "type":"getHIDdevices",
+       "type":"gethiddevices-p",
        "z":"3b6a718c4021497b",
        "g":"cbae0763803aa6e9",
        "name":"",
@@ -86,7 +86,7 @@
     },
     {
        "id":"546ab3a525f72ecc",
-       "type":"HIDdevice",
+       "type":"hiddevice-p",
        "z":"3b6a718c4021497b",
        "g":"cbae0763803aa6e9",
        "connection":"68a0ec4b6af1dcb1",
@@ -176,7 +176,7 @@
     },
     {
        "id":"68a0ec4b6af1dcb1",
-       "type":"HIDConfig",
+       "type":"hidconfig-p",
        "vid":"1504",
        "pid":"1536",
        "name":"Barcode Scanner"
