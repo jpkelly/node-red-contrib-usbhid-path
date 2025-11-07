@@ -1,13 +1,13 @@
 {
   "name": "@jpkelly/node-red-usbhid",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "A node-hid wrapper for Node-RED with path-based device selection support",
   "dependencies": {
     "node-hid": "^3.0.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gdziuba/node-red-contrib-usbhid.git"
+    "url": "git+https://github.com/jpkelly/node-red-contrib-usbhid-path.git"
   },
   "keywords": [
     "HID",
@@ -24,12 +24,12 @@
       "usbhid": "usbhid/usbhid.js"
     }
   },
-  "author": "gdziuba",
+  "author": "jpkelly",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/gdziuba/node-red-contrib-usbhid/issues"
+    "url": "https://github.com/jpkelly/node-red-contrib-usbhid-path/issues"
   },
-  "homepage": "https://github.com/gdziuba/node-red-contrib-usbhid#readme",
+  "homepage": "https://github.com/jpkelly/node-red-contrib-usbhid-path#readme",
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

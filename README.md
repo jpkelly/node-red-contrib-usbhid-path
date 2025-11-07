@@ -1,8 +1,13 @@
-# node-red-contrib-usbhid
+# node-red-contrib-usbhid-path
 
-A node-hid (USB HID device access library) wrapper for Node-RED with path-based device selection support. This fork adds the ability to select devices by path, which is useful when you have multiple identical devices with the same VID/PID.
+A fork of node-red-contrib-usbhid that adds path-based device selection support. This enhancement is particularly useful when working with multiple identical devices that share the same VID/PID.
 
-Credit goes to node-hid and the original node-red-contrib-usbhid package.
+## Credits
+This package is based on [node-red-contrib-usbhid](https://github.com/gdziuba/node-red-contrib-usbhid) by [@gdziuba](https://github.com/gdziuba). The original package provided the foundation for USB HID communication in Node-RED, and this fork adds path-based device selection capabilities while maintaining compatibility with the original package.
+
+### Acknowledgments
+- Original package by [@gdziuba](https://github.com/gdziuba)
+- Uses [node-hid](https://github.com/node-hid/node-hid) for USB HID communication
 
 ## Features
 
