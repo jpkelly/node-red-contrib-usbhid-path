@@ -1,6 +1,6 @@
 {
   "name": "@jpkelly/node-red-usbhid",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "A node-hid wrapper for Node-RED with path-based device selection support",
   "dependencies": {
     "node-hid": "^3.0.0"

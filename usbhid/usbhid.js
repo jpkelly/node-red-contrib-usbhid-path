@@ -21,10 +21,13 @@ module.exports = function(RED) {
     }
   });
 
-  // Helper function to open HID device by path or VID/PID
-  function openHid(config) {
+  // Helper function to get device details
+  function getDeviceDetails(config) {
     if (config.path && String(config.path).trim()) {
-      return new HID.HID(String(config.path).trim());
+      const path = String(config.path).trim();
+      const match = HID.devices().find(d => d.path === path);
+      if (!match) throw new Error('HID device not found (path).');
+      return match;
     }
     const vid = parseInt(config.vid);
     const pid = parseInt(config.pid);
@@ -36,7 +39,13 @@ module.exports = function(RED) {
       (iface == null || d.interface === iface)
     );
     if (!match || !match.path) throw new Error('HID device not found (VID/PID/interface).');
-    return new HID.HID(match.path);
+    return match;
+  }
+
+  // Helper function to open HID device by path or VID/PID
+  function openHid(config) {
+    const deviceInfo = getDeviceDetails(config);
+    return new HID.HID(deviceInfo.path);
   }
 
   function HIDConfigNode(n) {
@@ -94,6 +103,8 @@ module.exports = function(RED) {
 
     function connect() {
       try {
+        // Get device details before connecting
+        const deviceInfo = getDeviceDetails(node.server);
         device = openHid(node.server);
         node.log("HID device opened successfully");
         
@@ -120,11 +131,21 @@ module.exports = function(RED) {
           scheduleReconnect();
         });
         
-        // After successful setup, send connected status
+        // After successful setup, send connected status with device info
+        const deviceName = deviceInfo.product || `VID:${deviceInfo.vendorId} PID:${deviceInfo.productId}`;
+        const devicePath = deviceInfo.path ? ` (${deviceInfo.path})` : '';
         sendStatus({
             fill: "green",
             shape: "dot",
-            text: "connected"
+            text: `connected to ${deviceName}${devicePath}`,
+            device: {
+                product: deviceInfo.product,
+                vendorId: deviceInfo.vendorId,
+                productId: deviceInfo.productId,
+                path: deviceInfo.path,
+                serialNumber: deviceInfo.serialNumber,
+                interface: deviceInfo.interface
+            }
         });
         
         // Set up event handlers after successful connection

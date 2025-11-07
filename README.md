@@ -33,7 +33,10 @@ This package provides three nodes with -p suffix to avoid conflicts with the ori
 3. `hiddevice-p` - Communicate with HID devices
    - Send and receive data from HID devices
    - Auto-reconnect on device disconnect
-   - Two outputs: data and errors
+   - Three outputs:
+     - Output 1: Data received from device
+     - Output 2: Error messages
+     - Output 3: Connection status updates
 
 ## Prerequisites
 
@@ -110,8 +113,74 @@ sudo reboot
    - Output 1: Received data
    - Output 2: Errors
 
+### Connection Status Output
+
+The `hiddevice-p` node provides real-time connection status through its third output. The status message format is:
+
+```javascript
+{
+    topic: "status",
+    payload: {
+        fill: "green" | "yellow" | "red",  // Status color
+        shape: "dot" | "ring",            // Status shape
+        text: "connected" | "disconnected" | "reconnecting in Xs"  // Status text
+    },
+    timestamp: 1234567890  // Timestamp of status change
+}
+```
+
+Status indicators:
+- 🟢 Green: Device connected and ready (includes device details)
+- 🟡 Yellow: Attempting to reconnect
+- 🟥 Red: Device disconnected
+
+The connection status includes detailed device information in the payload:
+```javascript
+{
+    topic: "status",
+    payload: {
+        fill: "green",
+        shape: "dot",
+        text: "connected to Barcode Scanner (/dev/hidraw0)",  // Human-readable status
+        device: {
+            product: "Barcode Scanner",      // Device name if available
+            vendorId: 1234,                  // Vendor ID
+            productId: 5678,                 // Product ID
+            path: "/dev/hidraw0",           // Device path
+            serialNumber: "ABC123",          // Serial number if available
+            interface: 0                     // Interface number if applicable
+        }
+    },
+    timestamp: 1234567890
+}
+```
+
+### Example Flow: Status Display
+
+Here's an example of how to use the connection status output with a UI LED and text display:
+
+```json
+[
+    {
+        "id": "015f81a5e59b3ab8",
+        "type": "function",
+        "name": "Parse Connection Status",
+        "func": "// Log incoming message for debugging\nnode.log(\"Incoming message: \" + JSON.stringify(msg));\n\n// Get the status from the incoming message\nconst status = msg.payload;\n\nif (status && status.fill) {\n    // Create two separate messages\n    const ledMsg = { payload: 3 };  // Default to red\n    const textMsg = { payload: status.text };  // Use the actual status text\n\n    // Set LED color based on status\n    switch(status.fill) {\n        case \"green\":\n            ledMsg.payload = 1;  // Green\n            break;\n        case \"yellow\":\n            ledMsg.payload = 2;  // Yellow\n            break;\n        case \"red\":\n            ledMsg.payload = 3;  // Red\n            break;\n    }\n    \n    node.log(\"Setting LED state to: \" + ledMsg.payload);\n    node.log(\"Setting status text to: \" + textMsg.payload);\n\n    // Return array of messages [LED message, Text message]\n    return [ledMsg, textMsg];\n} else {\n    // Handle invalid status\n    return [{payload: 3}, {payload: \"Unknown status\"}];\n}",
+        "outputs": 2,
+        "noerr": 0
+    }
+]
+```
+
+To use this example:
+1. Connect the third output of your `hiddevice-p` node to the function node
+2. Add a FlowFuse Dashboard UI LED widget to the first output of the function
+   - Configure LED colors: 1=Green, 2=Yellow, 3=Red
+3. Add a FlowFuse Dashboard text widget to the second output
+   - This will display the connection status text
+
 ### Example Flow
-See the included `examples/getStarted.json` for a working example flow.
+See the included `examples/getStarted.json` for a complete working example flow.
 
 ## Important Notes
 

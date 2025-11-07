@@ -1,0 +1,122 @@
+[
+    {
+        "id": "device_status_demo",
+        "type": "tab",
+        "label": "HID Device Status Demo",
+        "disabled": false,
+        "info": "Example flow demonstrating enhanced device status information"
+    },
+    {
+        "id": "status_parser",
+        "type": "function",
+        "z": "device_status_demo",
+        "name": "Parse Device Status",
+        "func": "// Extract status and device information\nconst status = msg.payload;\n\nif (status && status.device) {\n    // Create messages for different UI elements\n    const ledMsg = { payload: 3 };  // Default to red\n    const statusMsg = { payload: status.text };\n    const deviceInfoMsg = {\n        payload: JSON.stringify({\n            Name: status.device.product || 'Unknown',\n            'Vendor ID': '0x' + status.device.vendorId.toString(16),\n            'Product ID': '0x' + status.device.productId.toString(16),\n            Path: status.device.path,\n            'Serial Number': status.device.serialNumber || 'N/A',\n            Interface: status.device.interface !== undefined ? status.device.interface : 'N/A'\n        }, null, 2)\n    };\n\n    // Set LED color based on connection status\n    switch(status.fill) {\n        case \"green\":\n            ledMsg.payload = 1;  // Green\n            break;\n        case \"yellow\":\n            ledMsg.payload = 2;  // Yellow\n            break;\n        case \"red\":\n            ledMsg.payload = 3;  // Red\n            break;\n    }\n\n    // Return array of messages [LED, Status Text, Device Info]\n    return [ledMsg, statusMsg, deviceInfoMsg];\n} else {\n    // Handle invalid status\n    return [{ payload: 3 }, { payload: \"Unknown status\" }, { payload: \"No device information available\" }];\n}\n",
+        "outputs": 3,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 360,
+        "y": 180,
+        "wires": [
+            ["status_led"],
+            ["status_text"],
+            ["device_info"]
+        ]
+    },
+    {
+        "id": "status_led",
+        "type": "ui_led",
+        "z": "device_status_demo",
+        "group": "Device Status",
+        "order": 0,
+        "label": "Connection",
+        "colorForValue": [
+            {"color":"#00ff00","value":"1","valueType":"num"},
+            {"color":"#ffff00","value":"2","valueType":"num"},
+            {"color":"#ff0000","value":"3","valueType":"num"}
+        ],
+        "x": 540,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "status_text",
+        "type": "ui_text",
+        "z": "device_status_demo",
+        "group": "Device Status",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "name": "Status",
+        "label": "Status",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "x": 540,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "device_info",
+        "type": "ui_template",
+        "z": "device_status_demo",
+        "group": "Device Status",
+        "name": "Device Details",
+        "order": 2,
+        "width": "6",
+        "height": "4",
+        "format": "<pre style=\"font-family: monospace;\">{{msg.payload}}</pre>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "templateScope": "local",
+        "x": 540,
+        "y": 220,
+        "wires": [[]]
+    },
+    {
+        "id": "hid_device",
+        "type": "hiddevice-p",
+        "z": "device_status_demo",
+        "name": "HID Device",
+        "connection": "hid_config",
+        "x": 180,
+        "y": 180,
+        "wires": [
+            ["data_debug"],
+            ["error_debug"],
+            ["status_parser"]
+        ]
+    },
+    {
+        "id": "data_debug",
+        "type": "debug",
+        "z": "device_status_demo",
+        "name": "Data",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "complete": "payload",
+        "x": 350,
+        "y": 120,
+        "wires": []
+    },
+    {
+        "id": "error_debug",
+        "type": "debug",
+        "z": "device_status_demo",
+        "name": "Errors",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "complete": "payload",
+        "x": 350,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "hid_config",
+        "type": "hidconfig-p",
+        "name": "Device Config"
+    }
+]

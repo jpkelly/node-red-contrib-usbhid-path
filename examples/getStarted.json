@@ -14,12 +14,15 @@
           "546ab3a525f72ecc",
           "1b5120024bf4bc62",
           "f8d8cae1919e186c",
-          "e1d69c8863f6de73"
+          "e1d69c8863f6de73",
+          "015f81a5e59b3ab8",
+          "8b5c64cdb00a690d",
+          "a17e569ebce6c306"
        ],
        "x":34,
        "y":19,
-       "w":692,
-       "h":122
+       "w":1092,
+       "h":182
     },
     {
        "id":"78f82fb335672aca",
@@ -97,8 +100,9 @@
           [
              "e1d69c8863f6de73"
           ],
+          [],
           [
-             
+             "015f81a5e59b3ab8"
           ]
        ]
     },
@@ -180,5 +184,68 @@
        "vid":"1504",
        "pid":"1536",
        "name":"Barcode Scanner"
+    },
+    {
+        "id": "015f81a5e59b3ab8",
+        "type": "function",
+        "z": "3b6a718c4021497b",
+        "g": "cbae0763803aa6e9",
+        "name": "Parse Connection Status",
+        "func": "// Log incoming message for debugging\nnode.log(\"Incoming message: \" + JSON.stringify(msg));\n\n// Get the status from the incoming message\nconst status = msg.payload;\n\nif (status && status.fill) {\n    // Create two separate messages\n    const ledMsg = { payload: 3 };  // Default to red\n    const textMsg = { payload: status.text };  // Use the actual status text\n\n    // Set LED color based on status\n    switch(status.fill) {\n        case \"green\":\n            ledMsg.payload = 1;  // Green\n            break;\n        case \"yellow\":\n            ledMsg.payload = 2;  // Yellow\n            break;\n        case \"red\":\n            ledMsg.payload = 3;  // Red\n            break;\n    }\n    \n    node.log(\"Setting LED state to: \" + ledMsg.payload);\n    node.log(\"Setting status text to: \" + textMsg.payload);\n\n    // Return array of messages [LED message, Text message]\n    return [ledMsg, textMsg];\n} else {\n    // Handle invalid status\n    return [{payload: 3}, {payload: \"Unknown status\"}];\n}",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 160,
+        "wires": [
+            ["8b5c64cdb00a690d"],
+            ["a17e569ebce6c306"]
+        ]
+    },
+    {
+        "id": "8b5c64cdb00a690d",
+        "type": "ui_led",
+        "z": "3b6a718c4021497b",
+        "g": "cbae0763803aa6e9",
+        "order": 0,
+        "group": "Connection Status",
+        "width": 0,
+        "height": 0,
+        "label": "Connection LED",
+        "labelPlacement": "left",
+        "labelAlignment": "left",
+        "colorForValue": [
+            {"color":"#00ff00","value":"1","valueType":"num"},
+            {"color":"#ffff00","value":"2","valueType":"num"},
+            {"color":"#ff0000","value":"3","valueType":"num"}
+        ],
+        "allowColorForValueInMessage": false,
+        "shape": "circle",
+        "showGlow": true,
+        "name": "Connection LED",
+        "x": 660,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "a17e569ebce6c306",
+        "type": "ui_text",
+        "z": "3b6a718c4021497b",
+        "g": "cbae0763803aa6e9",
+        "group": "Connection Status",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "name": "Status Text",
+        "label": "Status",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "x": 660,
+        "y": 180,
+        "wires": []
     }
- ]
+]
