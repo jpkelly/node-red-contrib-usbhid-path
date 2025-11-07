@@ -137,26 +137,6 @@ module.exports = function(RED) {
         // Reset backoff on successful connection
         backoffDelay = 250;
         
-        // Set up event handlers first
-        device.on("data", function(data) {
-          var message = {
-            payload: data
-          };
-          node.send([message, null, null]);
-        });
-
-        // Handle device errors
-        device.on("error", function(err) {
-          node.error("HID device error: " + err.toString());
-          var message = {
-            payload: err
-          };
-          node.send([null, message, null]);
-          
-          // Attempt reconnect
-          scheduleReconnect();
-        });
-        
         // After successful setup, send connected status with device info
         const deviceName = deviceInfo.product || `VID:${deviceInfo.vendorId} PID:${deviceInfo.productId}`;
         const devicePath = deviceInfo.path ? ` (${deviceInfo.path})` : '';
