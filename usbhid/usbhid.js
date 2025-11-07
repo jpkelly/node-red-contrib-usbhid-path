@@ -1,4 +1,5 @@
-console.log("✅ Loaded @jpkelly/node-red-usbhid (local dev mode)");
+const pkg = require('../package.json');
+console.log(`✅ Loaded ${pkg.name} v${pkg.version}`);
 module.exports = function(RED) {
 
   var HID = require('node-hid');
