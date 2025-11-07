@@ -6,6 +6,7 @@
             pid: {value: '', required: true},
             interface: {value: ''},
             path: {value: ''},
+            manufacturer: {value: ''},
             name: {value: ''}
         },
         label: function() {
@@ -20,7 +21,8 @@
                         select.append('<option value="">Select a device...</option>');
                         
                         data.forEach(function(device) {
-                            var label = (device.product || 'Unknown Device') + 
+                            var label = ((device.manufacturer ? device.manufacturer + ' - ' : '') + 
+                                     (device.product || 'Unknown Device')) + 
                                      ' VID:0x' + device.vendorId.toString(16).padStart(4, '0').toUpperCase() + 
                                      ' PID:0x' + device.productId.toString(16).padStart(4, '0').toUpperCase();
                             if (device.interface !== undefined) {
@@ -44,7 +46,23 @@
             $('#usbhid-use').click(function() {
                 var selectedPath = $('#usbhid-device-list').val();
                 if (selectedPath) {
-                    $('#node-config-input-path').val(selectedPath);
+                    // Find the selected device in our data
+                    $.get('/usbhid/devices')
+                        .done(function(devices) {
+                            var device = devices.find(d => d.path === selectedPath);
+                            if (device) {
+                                // Populate all relevant fields
+                                $('#node-config-input-path').val(device.path);
+                                $('#node-config-input-vid').val(device.vendorId);
+                                $('#node-config-input-pid').val(device.productId);
+                                if (device.interface !== undefined) {
+                                    $('#node-config-input-interface').val(device.interface);
+                                }
+                                if (device.manufacturer) {
+                                    $('#node-config-input-manufacturer').val(device.manufacturer);
+                                }
+                            }
+                        });
                 }
             });
             
@@ -69,6 +87,10 @@
     <div class="form-row">
         <label for="node-config-input-path"><i class="fa"></i> Path</label>
         <input type="text" id="node-config-input-path" placeholder="If set, Path overrides VID/PID">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-manufacturer"><i class="fa"></i> Manufacturer</label>
+        <input type="text" id="node-config-input-manufacturer" placeholder="Optional: filter by manufacturer">
     </div>
     <div class="form-row">
         <label><i class="fa fa-list"></i> Devices</label>

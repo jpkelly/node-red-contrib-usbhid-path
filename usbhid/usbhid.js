@@ -13,6 +13,7 @@ module.exports = function(RED) {
         productId: d.productId,
         interface: d.interface,
         product: d.product,
+        manufacturer: d.manufacturer,
         serialNumber: d.serialNumber
       }));
       res.json(devs);
@@ -33,12 +34,20 @@ module.exports = function(RED) {
     const pid = parseInt(config.pid);
     const iface = (config.interface !== "" && config.interface !== undefined)
         ? parseInt(config.interface) : undefined;
+    const manufacturer = config.manufacturer ? String(config.manufacturer).trim() : undefined;
+    
     const match = HID.devices().find(d =>
       d.vendorId === vid &&
       d.productId === pid &&
-      (iface == null || d.interface === iface)
+      (iface == null || d.interface === iface) &&
+      (!manufacturer || (d.manufacturer && d.manufacturer.toLowerCase().includes(manufacturer.toLowerCase())))
     );
-    if (!match || !match.path) throw new Error('HID device not found (VID/PID/interface).');
+    if (!match || !match.path) {
+      const errorDetails = manufacturer 
+        ? '(VID/PID/interface/manufacturer)' 
+        : '(VID/PID/interface)';
+      throw new Error('HID device not found ' + errorDetails + '.');
+    }
     return match;
   }
 
@@ -71,6 +80,8 @@ module.exports = function(RED) {
     var reconnectTimer = null;
     var backoffDelay = 250; // Start with 250ms
     var maxBackoffDelay = 5000; // Max 5 seconds
+    var deviceCheckInterval = null;
+    var lastDeviceState = null;
 
     // Helper function to send status updates
     function sendStatus(status) {
@@ -250,8 +261,65 @@ module.exports = function(RED) {
       }
     });
 
+    // Check for device presence/absence
+    function checkDevicePresence() {
+      try {
+        const currentDevice = getDeviceDetails(node.server);
+        const deviceState = JSON.stringify(currentDevice);
+        
+        if (lastDeviceState === null) {
+          // First check, store initial state
+          lastDeviceState = deviceState;
+        } else if (deviceState !== lastDeviceState) {
+          // Device state changed
+          if (!device) {
+            // If we're not connected, try to connect
+            connect();
+          } else {
+            // If we are connected but device changed, reconnect
+            scheduleReconnect();
+          }
+          lastDeviceState = deviceState;
+        }
+      } catch (err) {
+        // Device not found
+        if (lastDeviceState !== null) {
+          // Only trigger disconnect if we previously had a device
+          if (device) {
+            node.error("Device disconnected: " + err.toString());
+            scheduleReconnect();
+          }
+          lastDeviceState = null;
+        }
+      }
+    }
+
+    // Start device monitoring
+    deviceCheckInterval = setInterval(checkDevicePresence, 1000);
+
     // Initial connection attempt
     connect();
+
+    // Clean up interval on node close
+    this.on('close', function(done) {
+      if (deviceCheckInterval) {
+        clearInterval(deviceCheckInterval);
+        deviceCheckInterval = null;
+      }
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      if (device) {
+        try {
+          device.close();
+        } catch (e) {
+          // Ignore close errors
+        }
+        device = null;
+      }
+      done();
+    });
   }
 
 
