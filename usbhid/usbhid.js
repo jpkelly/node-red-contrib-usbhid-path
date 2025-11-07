@@ -25,8 +25,23 @@ module.exports = function(RED) {
   // Helper function to get device details
   function getDeviceDetails(config) {
     if (config.path && String(config.path).trim()) {
-      const path = String(config.path).trim();
-      const match = HID.devices().find(d => d.path === path);
+      let path = String(config.path).trim();
+      // Try direct path first
+      let match = HID.devices().find(d => d.path === path);
+      if (!match) {
+        // If not found, try resolving potential symlink
+        try {
+          const fs = require('fs');
+          const resolvedPath = fs.readlinkSync(path);
+          if (resolvedPath) {
+            // If it was a symlink, try with the resolved path
+            const fullPath = resolvedPath.startsWith('/') ? resolvedPath : `/dev/${resolvedPath}`;
+            match = HID.devices().find(d => d.path === fullPath);
+          }
+        } catch(e) {
+          // Ignore errors from readlink
+        }
+      }
       if (!match) throw new Error('HID device not found (path).');
       return match;
     }
