@@ -1,5 +1,5 @@
 {
-  "name": "@jpkelly/node-red-usbhid",
+  "name": "node-red-contrib-usbhid-path",
   "version": "1.2.0",
   "description": "A node-hid wrapper for Node-RED with path-based device selection support",
   "dependencies": {
