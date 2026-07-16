@@ -14,7 +14,7 @@ module.exports = function(RED) {
         interface: d.interface,
         product: d.product,
         manufacturer: d.manufacturer,
-        serialNumber: d.serialNumber
+        serialNumber: d.serialNumbers
       }));
       res.json(devs);
     } catch(e) {
@@ -67,8 +67,7 @@ module.exports = function(RED) {
   }
 
   // Helper function to open HID device by path or VID/PID
-  function openHid(config) {
-    const deviceInfo = getDeviceDetails(config);
+  function openHid(deviceInfo) {
     return new HID.HID(deviceInfo.path);
   }
 
@@ -97,6 +96,23 @@ module.exports = function(RED) {
     var maxBackoffDelay = 5000; // Max 5 seconds
     var deviceCheckInterval = null;
     var lastDeviceState = null;
+    var isConnecting = false; // guard against overlapping connect attempts
+
+    // Presence poll interval. It exists mainly as a safety net for hot-plug
+    // detection; the device's own "error" event already handles
+    // unplug/disconnect on most platforms. Polling every 1s with a synchronous
+    // HID.devices() call while a handle is open was the most likely cause of
+    // intermittent event-loop stalls.
+    var DEVICE_CHECK_INTERVAL_MS = 5000;
+
+    // Throttle for outgoing "data" messages. Some HID devices (steering wheels
+    // especially) report at very high rates; forwarding every single report
+    // straight into node.send() can flood downstream flow execution and make
+    // Node-RED appear to freeze even though the device itself is fine.
+    // Set to 0 to disable throttling (forward everything), or raise it if you
+    // still see issues.
+    var MIN_SEND_INTERVAL_MS = 5; // ~200 messages/sec max
+    var lastSendTime = 0;
 
     // Helper function to send status updates
     function sendStatus(status) {
@@ -128,10 +144,13 @@ module.exports = function(RED) {
     });
 
     function connect() {
+      if (isConnecting) return; // don't allow overlapping connects
+      isConnecting = true;
+
       try {
         // Get device details before connecting
         const deviceInfo = getDeviceDetails(node.server);
-        device = openHid(node.server);
+        device = openHid(deviceInfo);
         node.log("HID device opened successfully");
         
         // Reset backoff on successful connection
@@ -154,8 +173,17 @@ module.exports = function(RED) {
             }
         });
         
+        lastDeviceState = JSON.stringify(deviceInfo);
+
         // Set up event handlers after successful connection
         device.on("data", function(data) {
+          // Throttle high-frequency reports
+          const now = Date.now();
+          if (MIN_SEND_INTERVAL_MS > 0 && (now - lastSendTime) < MIN_SEND_INTERVAL_MS) {
+            return;
+          }
+          lastSendTime = now;
+
           var message = {
             payload: data
           };
@@ -184,6 +212,8 @@ module.exports = function(RED) {
         });
         
         scheduleReconnect();
+      } finally {
+        isConnecting = false;
       }
     }
 
@@ -241,23 +271,9 @@ module.exports = function(RED) {
       }
     });
 
-    this.on('close', function() {
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      if (device) {
-        try {
-          device.close();
-        } catch (e) {
-          // Ignore close errors
-        }
-        device = null;
-      }
-    });
-
     // Check for device presence/absence
     function checkDevicePresence() {
+      if (isConnecting) return; // skip overlapping with an in-progress connect
       try {
         const currentDevice = getDeviceDetails(node.server);
         const deviceState = JSON.stringify(currentDevice);
@@ -290,7 +306,7 @@ module.exports = function(RED) {
     }
 
     // Start device monitoring
-    deviceCheckInterval = setInterval(checkDevicePresence, 1000);
+    deviceCheckInterval = setInterval(checkDevicePresence, DEVICE_CHECK_INTERVAL_MS);
 
     // Initial connection attempt
     connect();
