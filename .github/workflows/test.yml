@@ -1,0 +1,70 @@
+name: HID lifecycle tests
+
+on:
+  push:
+    branches: [main, 'fix/**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node: '12.22.12'
+            node-red: '2.0.6'
+            helper: '0.2.7'
+            hid: '3.0.0'
+          - node: '14.21.3'
+            node-red: '2.2.3'
+            helper: '0.3.6'
+            hid: '3.0.0'
+          - node: '16.20.2'
+            node-red: '3.1.15'
+            helper: '0.3.6'
+            hid: '3.0.0'
+          - node: '18.20.4'
+            node-red: '4.1.0'
+            helper: '0.3.6'
+            hid: '3.0.0'
+          - node: '18.20.4'
+            node-red: '4.1.0'
+            helper: '0.3.6'
+            hid: '3.1.0'
+          - node: '20'
+            node-red: '4.1.0'
+            helper: '0.3.6'
+            hid: '3.1.0'
+          - node: '22'
+            node-red: '4.1.0'
+            helper: '0.3.6'
+            hid: '3.1.0'
+          - node: '24'
+            node-red: '4.1.0'
+            helper: '0.3.6'
+            hid: '3.1.0'
+    name: Node ${{ matrix.node }} / Node-RED ${{ matrix.node-red }} / HID ${{ matrix.hid }}
+    steps:
+      - uses: actions/checkout@v4
+      # Install with modern npm (lockfile v3); execute tests on the target runtime.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Select compatibility dependencies (CI checkout only)
+        run: npm install --ignore-scripts --no-save --package-lock=false node-red@${{ matrix.node-red }} node-red-node-test-helper@${{ matrix.helper }} node-hid@${{ matrix.hid }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Verify runtime and async API surface without accessing hardware
+        run: |
+          node --version
+          node -e "for (const name of ['node-red', 'node-hid', 'node-red-node-test-helper']) console.log(name, require(name + '/package.json').version); const hid = require('node-hid'); if (typeof hid.HIDAsync.open !== 'function' || typeof hid.devicesAsync !== 'function') process.exit(1)"
+      - run: npm test
