@@ -18,6 +18,8 @@ jobs:
       matrix:
         include:
           - node: '12.22.12'
+            # Newer nise 5.x pulls fake-timers syntax unsupported by Node 12.
+            test-extras: 'nise@5.1.0'
             node-red: '2.0.6'
             helper: '0.2.7'
             hid: '3.0.0'
@@ -59,7 +61,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Select compatibility dependencies (CI checkout only)
-        run: npm install --ignore-scripts --no-save --package-lock=false node-red@${{ matrix.node-red }} node-red-node-test-helper@${{ matrix.helper }} node-hid@${{ matrix.hid }}
+        run: npm install --ignore-scripts --no-save --package-lock=false node-red@${{ matrix.node-red }} node-red-node-test-helper@${{ matrix.helper }} node-hid@${{ matrix.hid }} ${{ matrix.test-extras }}
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
