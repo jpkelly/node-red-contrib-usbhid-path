@@ -96,8 +96,11 @@ module.exports = function(RED) {
 
     function reportError(err, prefix, logError = true) {
       if (stopping) return;
-      if (logError) node.error(prefix + err.toString());
-      node.send([null, { payload: err }, null]);
+      // node-hid's native async reader emits strings on disconnect.
+      // Preserve existing Error instances, including their stack and metadata.
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (logError) node.error(prefix + error.toString());
+      node.send([null, { payload: error }, null]);
     }
 
     async function closeConnection() {

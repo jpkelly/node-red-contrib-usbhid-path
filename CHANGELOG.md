@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ignore retired-device callbacks, coalesce reconnect triggers, and cancel timers on shutdown.
 - Pass the saved manufacturer filter to device selection and resolve relative symlinks from their directory.
 - Preserve existing configuration fields and data/error/status formats; report open/write failures on the error output too.
+- Normalize native disconnect strings to Error payloads on output 2, preserving existing Error instances and their metadata.
 
 ### Added
 - Mocked lifecycle regressions and Node-RED test-helper load/unload/output tests.

@@ -189,6 +189,8 @@ Device enumeration, opens, writes, and closes use node-hid's asynchronous API. E
 
 Existing node names, configuration fields and three outputs are unchanged. A path takes precedence over VID/PID and optional interface/manufacturer filters; symlinks are resolved relative to their directory. Manufacturer matching is case-insensitive and now correctly receives the saved configuration field. Input accepts Buffer or Array. Output 1 remains `{payload: Buffer}`, output 2 remains `{payload: Error}`, and output 3 retains the status fields documented above. Connection/open/write failures also reach output 2; input completion now occurs exactly once after the write settles, with failed inputs reported through Node-RED's `done(err)`/Catch mechanism.
 
+Native string errors (including node-hid 3.1.0 disconnect notifications) are converted to Error objects on output 2 with the original text in `msg.payload.message`. Existing Error objects retain their stack and metadata.
+
 Run automated tests in a development checkout:
 
 ```sh

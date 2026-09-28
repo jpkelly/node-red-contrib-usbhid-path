@@ -26,6 +26,32 @@ describe('HID lifecycle (mocked hardware)', function() {
   }
   function statuses() { return node.send.args.map(([m]) => m[2]).filter(Boolean); }
 
+  for (const nativeString of [true, false]) {
+    it('reports native disconnects as Error objects ' + (nativeString ? 'from strings' : 'without replacing existing errors'), async function() {
+      const d = await start();
+      const message = 'could not read from HID device';
+      const failure = nativeString ? message : Object.assign(new Error(message), { code: 'EIO' });
+      const oldError = d.listeners('error')[0];
+      d.emit('error', failure);
+      oldError(failure); // A duplicate callback must not publish another error.
+      await flush();
+      const errors = node.send.args.map(([m]) => m[1]).filter(Boolean);
+      assert.strictEqual(errors.length, 1);
+      assert(errors[0].payload instanceof Error);
+      assert.strictEqual(errors[0].payload.message, message);
+      if (!nativeString) {
+        assert.strictEqual(errors[0].payload, failure);
+        assert.strictEqual(errors[0].payload.code, 'EIO');
+      }
+      assert.strictEqual(d.close.callCount, 1);
+      await tick(250);
+      assert.strictEqual(HID.HIDAsync.open.callCount, 2);
+      const sends = node.send.callCount;
+      oldError(failure);
+      assert.strictEqual(node.send.callCount, sends);
+    });
+  }
+
   it('has one input/close handler, preserves Buffer/Array writes and completes each once', async function() {
     const d = await start();
     assert.strictEqual(node.listenerCount('input'), 1);

@@ -66,6 +66,21 @@ describe('Node-RED runtime integration (mocked hardware)', function() {
     assert.deepStrictEqual(status.slice(1).map(m => m.payload.text), ['disconnected', 'reconnecting in 0.3s']);
   });
 
+  it('delivers native disconnect strings as Error payloads through output two', async function() {
+    await loadFlow();
+    await flush();
+    const d = await HID.HIDAsync.open.firstCall.returnValue;
+    const errors = collect('errors'), status = collect('status');
+    // Exact value emitted by node-hid 3.1.0 during the Pi unplug test.
+    d.emit('error', 'could not read from HID device');
+    await flush();
+    assert.strictEqual(errors.length, 1);
+    assert(errors[0].payload instanceof Error);
+    assert.strictEqual(errors[0].payload.message, 'could not read from HID device');
+    assert.deepStrictEqual(status.map(m => m.payload.text), ['disconnected', 'reconnecting in 0.3s']);
+    assert.strictEqual(d.close.callCount, 1);
+  });
+
   it('completes each actual runtime input once, only after its write settles', async function() {
     await loadFlow();
     await flush();
