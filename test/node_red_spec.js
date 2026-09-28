@@ -33,7 +33,8 @@ describe('Node-RED runtime integration (mocked hardware)', function() {
     await new Promise(resolve => helper.stopServer(resolve));
   });
   async function loadFlow(config, extra = []) {
-    await helper.load([load(HID), completeNode, catchNode], flow(config).concat(extra));
+    // Older helper versions require an explicit (empty) credentials object.
+    await helper.load([load(HID), completeNode, catchNode], flow(config).concat(extra), {});
   }
 
   it('loads existing config fields unchanged and preserves all three output formats', async function() {
