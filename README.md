@@ -38,20 +38,13 @@ This package provides three nodes with -p suffix to avoid conflicts with the ori
      - Output 2: Error messages
      - Output 3: Connection status updates
 
-## Prerequisites
+## Runtime compatibility
 
-* [Node.js](https://nodejs.org/) v0.8 - v4.x+
-* Mac OS X 10.8, Linux (kernel 2.6+), and Windows XP+
-* libudev-dev, libusb-1.0-0-dev (if Linux, see Compile below)
-* [git](https://git-scm.com/)
+The declared Node-RED requirement remains `>=2.0.0` and the runtime dependency remains `node-hid: ^3.0.0`. Use a Node.js version supported by your Node-RED release (Node-RED 2 requires Node.js 12 or newer; Node-RED 4.1 requires Node.js 18.5 or newer). This fix does not raise those requirements.
 
-node-hid uses node-pre-gyp to store pre-built binary bundles, so usually no compiler is needed to install.
+CI exercises Node.js 12/14 with Node-RED 2, Node.js 16 with Node-RED 3, and Node.js 18/20/22/24 with Node-RED 4.1.0. It explicitly includes Node.js **18.20.4**, Node-RED **4.1.0**, and node-hid **3.1.0**, plus node-hid **3.0.0** compatibility. Older runtimes are compatibility checks, not recommendations for new installations. The development test dependencies default to Node-RED 4.1.0; CI selects older test runtimes separately.
 
-Platforms we pre-build binaries for:
-- Mac OS X x64: v0.10, v0.12, v4.2.x
-- Windows x64 & x86: v0.10, v0.12, v4.2.x
-- Linux Debian/Ubuntu x64: v4.2.x
-- Raspberry Pi arm: v4.2.x
+node-hid supplies native binaries for supported platforms. Building from source on Linux may require `libudev-dev`, `libusb-1.0-0-dev`, and a compiler; see [node-hid installation](https://github.com/node-hid/node-hid#compiling-from-source).
 
 ## Installation
 
@@ -189,3 +182,22 @@ See the included `examples/getStarted.json` for a complete working example flow.
 - Multiple identical devices can be distinguished by their paths
 
 For more information about node-hid, visit: https://github.com/node-hid/node-hid
+
+## Lifecycle and testing
+
+Device enumeration, opens, writes, and closes use node-hid's asynchronous API. Each `hiddevice-p` serializes lifecycle operations and ignores callbacks from retired connections. Reconnect uses exponential backoff from 250 ms to 5 seconds; connected devices are checked about once per second. Shutdown cancels timers and waits for pending operations and native reader cleanup before completing. If native close rejects, the error is reported and automatic reopening stops to avoid overlapping handles. A stalled native operation can still exceed Node-RED's shutdown timeout; no forced close is attempted over pending I/O.
+
+Existing node names, configuration fields and three outputs are unchanged. A path takes precedence over VID/PID and optional interface/manufacturer filters; symlinks are resolved relative to their directory. Manufacturer matching is case-insensitive and now correctly receives the saved configuration field. Input accepts Buffer or Array. Output 1 remains `{payload: Buffer}`, output 2 remains `{payload: Error}`, and output 3 retains the status fields documented above. Connection/open/write failures also reach output 2; input completion now occurs exactly once after the write settles, with failed inputs reported through Node-RED's `done(err)`/Catch mechanism.
+
+Native string errors (including node-hid 3.1.0 disconnect notifications) are converted to Error objects on output 2 with the original text in `msg.payload.message`. Existing Error objects retain their stack and metadata.
+
+Run automated tests in a development checkout:
+
+```sh
+npm ci --ignore-scripts
+npm test
+```
+
+Tests use mocked HID devices, including during real Node-RED test-helper load/unload and message routing. They do not enumerate or open physical HID devices. CI checks the installed async API surface without loading the native binding; it does not validate native I/O or Raspberry Pi hardware.
+
+See the separate [isolated hardware test procedure](docs/hardware-testing.md) for the remaining native lifecycle checks. Publishing and production installation are separate later steps.

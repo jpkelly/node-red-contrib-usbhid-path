@@ -1,13 +1,13 @@
-const pkg = require('../package.json');
-console.log(`✅ Loaded ${pkg.name} v${pkg.version}`);
+const fs = require('fs').promises;
+const path = require('path');
+
 module.exports = function(RED) {
+  const HID = require('node-hid');
 
-  var HID = require('node-hid');
-
-  // Admin endpoint for device enumeration
-  RED.httpAdmin.get('/usbhid/devices', function(req, res) {
+  // Keep enumeration off the event loop as well as device I/O.
+  RED.httpAdmin.get('/usbhid/devices', async function(req, res) {
     try {
-      const devs = HID.devices().map(d => ({
+      const devs = (await HID.devicesAsync()).map(d => ({
         path: d.path,
         vendorId: d.vendorId,
         productId: d.productId,
@@ -17,29 +17,23 @@ module.exports = function(RED) {
         serialNumber: d.serialNumber
       }));
       res.json(devs);
-    } catch(e) {
+    } catch (err) {
       res.json([]);
     }
   });
 
-  // Helper function to get device details
-  function getDeviceDetails(config) {
+  async function getDeviceDetails(config) {
+    const devices = await HID.devicesAsync();
     if (config.path && String(config.path).trim()) {
-      let path = String(config.path).trim();
-      // Try direct path first
-      let match = HID.devices().find(d => d.path === path);
+      const devicePath = String(config.path).trim();
+      let match = devices.find(d => d.path === devicePath);
       if (!match) {
-        // If not found, try resolving potential symlink
         try {
-          const fs = require('fs');
-          const resolvedPath = fs.readlinkSync(path);
-          if (resolvedPath) {
-            // If it was a symlink, try with the resolved path
-            const fullPath = resolvedPath.startsWith('/') ? resolvedPath : `/dev/${resolvedPath}`;
-            match = HID.devices().find(d => d.path === fullPath);
-          }
-        } catch(e) {
-          // Ignore errors from readlink
+          const target = await fs.readlink(devicePath);
+          const resolvedPath = path.resolve(path.dirname(devicePath), target);
+          match = devices.find(d => d.path === resolvedPath);
+        } catch (err) {
+          // A missing/non-symlink path is reported below.
         }
       }
       if (!match) throw new Error('HID device not found (path).');
@@ -47,301 +41,237 @@ module.exports = function(RED) {
     }
     const vid = parseInt(config.vid);
     const pid = parseInt(config.pid);
-    const iface = (config.interface !== "" && config.interface !== undefined)
-        ? parseInt(config.interface) : undefined;
+    const iface = (config.interface !== '' && config.interface !== undefined)
+      ? parseInt(config.interface) : undefined;
     const manufacturer = config.manufacturer ? String(config.manufacturer).trim() : undefined;
-    
-    const match = HID.devices().find(d =>
-      d.vendorId === vid &&
-      d.productId === pid &&
+    const match = devices.find(d =>
+      d.vendorId === vid && d.productId === pid &&
       (iface == null || d.interface === iface) &&
       (!manufacturer || (d.manufacturer && d.manufacturer.toLowerCase().includes(manufacturer.toLowerCase())))
     );
     if (!match || !match.path) {
-      const errorDetails = manufacturer 
-        ? '(VID/PID/interface/manufacturer)' 
-        : '(VID/PID/interface)';
-      throw new Error('HID device not found ' + errorDetails + '.');
+      const details = manufacturer ? '(VID/PID/interface/manufacturer)' : '(VID/PID/interface)';
+      throw new Error('HID device not found ' + details + '.');
     }
     return match;
   }
 
-  // Helper function to open HID device by path or VID/PID
-  function openHid(config) {
-    const deviceInfo = getDeviceDetails(config);
-    return new HID.HID(deviceInfo.path);
-  }
-
-  function HIDConfigNode(n) {
-    RED.nodes.createNode(this, n);
-    this.vid = n.vid;
-    this.pid = n.pid;
-    this.interface = n.interface;
-    this.path = n.path;
-    // console.log(this.vid);
+  function HIDConfigNode(config) {
+    RED.nodes.createNode(this, config);
+    for (const field of ['vid', 'pid', 'interface', 'path', 'manufacturer']) {
+      this[field] = config[field];
+    }
   }
 
   function usbHIDNode(config) {
     RED.nodes.createNode(this, config);
+    const node = this;
+    node.server = RED.nodes.getNode(config.connection);
+    let stopping = false;
+    let connection = null;
+    let queue = Promise.resolve();
+    let shutdown;
+    let closeError;
+    let reconnectTimer = null;
+    let presenceTimer = null;
+    let backoffDelay = 250;
 
-    this.server = RED.nodes.getNode(config.connection);
-    if (!this.server) {
-      this.error("No HID configuration found");
-      return;
+    // Every open, write, presence check and close is ordered through this queue.
+    // Event callbacks may invalidate a connection immediately, but never close it.
+    function enqueue(operation) {
+      const result = queue.then(operation);
+      queue = result.catch(() => {});
+      return result;
     }
 
-    var node = this;
-    var device = null;
-    var reconnectTimer = null;
-    var backoffDelay = 250; // Start with 250ms
-    var maxBackoffDelay = 5000; // Max 5 seconds
-    var deviceCheckInterval = null;
-    var lastDeviceState = null;
+    function usable(current) {
+      return !stopping && current === connection && current && current.valid;
+    }
 
-    // Helper function to send status updates
     function sendStatus(status) {
-        node.status(status);
-        
-        const msg = {
-            topic: "status",
-            payload: status,
-            timestamp: new Date().getTime()
-        };
-        
-        // Use setImmediate to ensure the message is sent outside the current execution context
-        setImmediate(() => {
-            try {
-                node.send([null, null, msg]);
-                node.log(`Sent status message: ${status.text}`);
-            } catch (e) {
-                node.error("Error sending status message: " + e.toString());
-            }
-        });
+      if (stopping) return;
+      node.status(status);
+      node.send([null, null, { topic: 'status', payload: status, timestamp: Date.now() }]);
     }
 
-    // Initialize all outputs
-    node.on("input", function(msg, send, done) {
-        // Ensure send exists (for backwards compatibility)
-        send = send || function() { node.send.apply(node, arguments); };
-        // Process message here
-        done();
-    });
+    function reportError(err, prefix, logError = true) {
+      if (stopping) return;
+      // node-hid's native async reader emits strings on disconnect.
+      // Preserve existing Error instances, including their stack and metadata.
+      const error = err instanceof Error ? err : new Error(String(err));
+      if (logError) node.error(prefix + error.toString());
+      node.send([null, { payload: error }, null]);
+    }
 
-    function connect() {
+    async function closeConnection() {
+      const current = connection;
+      if (!current) return;
+      current.valid = false;
+      connection = null;
       try {
-        // Get device details before connecting
-        const deviceInfo = getDeviceDetails(node.server);
-        device = openHid(node.server);
-        node.log("HID device opened successfully");
-        
-        // Reset backoff on successful connection
-        backoffDelay = 250;
-        
-        // After successful setup, send connected status with device info
-        const deviceName = deviceInfo.product || `VID:${deviceInfo.vendorId} PID:${deviceInfo.productId}`;
-        const devicePath = deviceInfo.path ? ` (${deviceInfo.path})` : '';
-        sendStatus({
-            fill: "green",
-            shape: "dot",
-            text: `connected to ${deviceName}${devicePath}`,
-            device: {
-                product: deviceInfo.product,
-                vendorId: deviceInfo.vendorId,
-                productId: deviceInfo.productId,
-                path: deviceInfo.path,
-                serialNumber: deviceInfo.serialNumber,
-                interface: deviceInfo.interface
-            }
-        });
-        
-        // Set up event handlers after successful connection
-        device.on("data", function(data) {
-          var message = {
-            payload: data
-          };
-          node.send([message, null, null]);
-        });
-
-        // Handle device errors
-        device.on("error", function(err) {
-          node.error("HID device error: " + err.toString());
-          var message = {
-            payload: err
-          };
-          node.send([null, message, null]);
-          
-          // Attempt reconnect
-          scheduleReconnect();
-        });
-
+        // HIDAsync.close() stops/joins its native reader before freeing the handle.
+        // Do not separately pause/remove data listeners: let close own that cleanup.
+        await current.device.close();
       } catch (err) {
-        node.error("Failed to connect to HID device: " + err.toString());
-        // Send disconnected status
-        sendStatus({
-            fill: "red",
-            shape: "ring",
-            text: "disconnected"
-        });
-        
-        scheduleReconnect();
+        // An uncertain close must never be followed by another open of the device.
+        closeError = err;
+        throw err;
       }
     }
 
     function scheduleReconnect() {
-      if (device) {
-        try {
-          device.close();
-        } catch (e) {
-          // Ignore close errors
-        }
-        device = null;
-      }
-      
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
-      
-      // Send reconnecting status
-      sendStatus({
-          fill: "yellow",
-          shape: "ring", 
-          text: "reconnecting in " + (backoffDelay/1000).toFixed(1) + "s"
-      });
-      
-      reconnectTimer = setTimeout(function() {
+      if (stopping || closeError || reconnectTimer) return;
+      sendStatus({ fill: 'yellow', shape: 'ring', text: 'reconnecting in ' + (backoffDelay / 1000).toFixed(1) + 's' });
+      reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        connect();
+        enqueue(connect).catch(err => reportError(err, 'HID reconnect error: '));
       }, backoffDelay);
-      
-      // Exponential backoff
-      backoffDelay = Math.min(backoffDelay * 2, maxBackoffDelay);
+      backoffDelay = Math.min(backoffDelay * 2, 5000);
     }
 
-    this.on('input', function(msg) {
-      if (!device) {
-        node.error("HID device not connected");
-        return;
-      }
+    function disconnect(current, err, prefix, logError = true) {
+      if (!usable(current)) return;
+      // Coalesce read errors, write failures and polling results for this handle.
+      current.valid = false;
+      reportError(err, prefix, logError);
+      sendStatus({ fill: 'red', shape: 'ring', text: 'disconnected' });
+      enqueue(async () => {
+        await closeConnection();
+        scheduleReconnect();
+      }).catch(error => reportError(error, 'Failed to close HID device: '));
+    }
 
-      var data;
-      if (Buffer.isBuffer(msg.payload)) {
-        data = Array.from(msg.payload);
-      } else if (Array.isArray(msg.payload)) {
-        data = msg.payload;
-      } else {
-        node.error("msg.payload must be Buffer or Array");
-        return;
-      }
-
+    async function connect() {
+      if (stopping || closeError || connection) return;
       try {
-        device.write(data);
+        const info = await getDeviceDetails(node.server);
+        if (stopping) return;
+        const device = await HID.HIDAsync.open(info.path);
+        const current = { device, info, valid: true };
+        connection = current;
+        if (stopping) {
+          await closeConnection();
+          return;
+        }
+        device.on('error', err => disconnect(current, err, 'HID device error: '));
+        device.on('data', data => {
+          if (usable(current)) node.send([{ payload: data }, null, null]);
+        });
+        backoffDelay = 250;
+        const name = info.product || `VID:${info.vendorId} PID:${info.productId}`;
+        sendStatus({
+          fill: 'green', shape: 'dot', text: `connected to ${name} (${info.path})`,
+          device: {
+            product: info.product,
+            vendorId: info.vendorId,
+            productId: info.productId,
+            path: info.path,
+            serialNumber: info.serialNumber,
+            interface: info.interface
+          }
+        });
       } catch (err) {
-        node.error("Failed to write to HID device: " + err.toString());
+        reportError(err, 'Failed to connect to HID device: ');
+        sendStatus({ fill: 'red', shape: 'ring', text: 'disconnected' });
+        await closeConnection();
         scheduleReconnect();
       }
-    });
-
-    this.on('close', function() {
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      if (device) {
-        try {
-          device.close();
-        } catch (e) {
-          // Ignore close errors
-        }
-        device = null;
-      }
-    });
-
-    // Check for device presence/absence
-    function checkDevicePresence() {
-      try {
-        const currentDevice = getDeviceDetails(node.server);
-        const deviceState = JSON.stringify(currentDevice);
-        
-        if (lastDeviceState === null) {
-          // First check, store initial state
-          lastDeviceState = deviceState;
-        } else if (deviceState !== lastDeviceState) {
-          // Device state changed
-          if (!device) {
-            // If we're not connected, try to connect
-            connect();
-          } else {
-            // If we are connected but device changed, reconnect
-            scheduleReconnect();
-          }
-          lastDeviceState = deviceState;
-        }
-      } catch (err) {
-        // Device not found
-        if (lastDeviceState !== null) {
-          // Only trigger disconnect if we previously had a device
-          if (device) {
-            node.error("Device disconnected: " + err.toString());
-            scheduleReconnect();
-          }
-          lastDeviceState = null;
-        }
-      }
     }
 
-    // Start device monitoring
-    deviceCheckInterval = setInterval(checkDevicePresence, 1000);
-
-    // Initial connection attempt
-    connect();
-
-    // Clean up interval on node close
-    this.on('close', function(done) {
-      if (deviceCheckInterval) {
-        clearInterval(deviceCheckInterval);
-        deviceCheckInterval = null;
-      }
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-        reconnectTimer = null;
-      }
-      if (device) {
-        try {
-          device.close();
-        } catch (e) {
-          // Ignore close errors
-        }
-        device = null;
-      }
-      done();
-    });
-  }
-
-
-  function toArray(buffer) {
-    var view = [];
-    for (var i = 0; i < buffer.length; ++i) {
-      view.push(buffer[i]);
+    // A chained timeout prevents slow enumeration from building up queued checks.
+    function monitorPresence() {
+      if (stopping || closeError) return;
+      presenceTimer = setTimeout(() => {
+        presenceTimer = null;
+        enqueue(async () => {
+          const current = connection;
+          if (!usable(current)) return;
+          try {
+            const info = await getDeviceDetails(node.server);
+            if (JSON.stringify(info) !== JSON.stringify(current.info)) {
+              disconnect(current, new Error('HID device changed'), 'Device disconnected: ');
+            }
+          } catch (err) {
+            disconnect(current, err, 'Device disconnected: ');
+          }
+        }).catch(err => reportError(err, 'HID presence check error: ')).then(monitorPresence);
+      }, 1000);
     }
-    return view;
-  }
 
+    node.on('input', function(msg, send, done) {
+      const complete = typeof done === 'function' ? done : err => {
+        if (err) node.error(err, msg);
+      };
+      const data = Buffer.isBuffer(msg.payload) || Array.isArray(msg.payload)
+        ? Array.from(msg.payload) : null;
+      enqueue(async () => {
+        if (stopping) throw new Error('HID node is closing');
+        if (!data) throw new Error('msg.payload must be Buffer or Array');
+        const current = connection;
+        if (!usable(current)) throw new Error('HID device not connected');
+        try {
+          await current.device.write(data);
+        } catch (err) {
+          // done(err) reports this input failure to Node-RED exactly once.
+          disconnect(current, err, 'Failed to write to HID device: ', false);
+          throw err;
+        }
+      }).then(() => complete(), err => complete(err));
+    });
+
+    node.on('close', function(removed, done) {
+      // Also accept the older close(done) calling convention.
+      if (typeof removed === 'function') done = removed;
+      if (!shutdown) {
+        stopping = true;
+        if (connection) connection.valid = false;
+        clearTimeout(reconnectTimer);
+        clearTimeout(presenceTimer);
+        reconnectTimer = presenceTimer = null;
+        shutdown = enqueue(async () => {
+          await closeConnection();
+          if (closeError) throw closeError;
+        });
+      }
+      shutdown.then(() => { if (done) done(); }, err => {
+        node.error('Failed to close HID device: ' + err.toString());
+        if (done) done(err);
+      });
+    });
+
+    if (!node.server) {
+      node.error('No HID configuration found');
+      return;
+    }
+    enqueue(connect).catch(err => reportError(err, 'HID connection error: '));
+    monitorPresence();
+  }
 
   function getHIDNode(config) {
     RED.nodes.createNode(this, config);
-
-    var node = this;
-    this.on('input', function(msg) {
-
-      var devices = HID.devices();
-      msg.payload = devices;
-      node.send(msg);
-
+    const node = this;
+    let stopping = false;
+    let pending = Promise.resolve();
+    node.on('input', function(msg, send, done) {
+      const complete = typeof done === 'function' ? done : err => {
+        if (err) node.error(err, msg);
+      };
+      const operation = pending.then(async () => {
+        if (stopping) return;
+        msg.payload = await HID.devicesAsync();
+        if (!stopping) (send || node.send.bind(node))(msg);
+      });
+      pending = operation.catch(() => {});
+      operation.then(() => complete(), err => complete(err));
+    });
+    node.on('close', function(removed, done) {
+      if (typeof removed === 'function') done = removed;
+      stopping = true;
+      pending.then(() => { if (done) done(); });
     });
   }
 
-
-  RED.nodes.registerType("gethiddevices-p", getHIDNode);
-  RED.nodes.registerType("hiddevice-p", usbHIDNode);
+  RED.nodes.registerType('gethiddevices-p', getHIDNode);
+  RED.nodes.registerType('hiddevice-p', usbHIDNode);
   RED.nodes.registerType('hidconfig-p', HIDConfigNode);
-}
+};
